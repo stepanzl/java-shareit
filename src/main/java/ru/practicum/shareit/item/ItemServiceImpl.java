@@ -56,37 +56,20 @@ public class ItemServiceImpl implements ItemService {
         log.info("Update item id={} by ownerId={}", itemId, ownerId);
 
         Item item = getItemOrThrow(itemId);
+        validateOwner(item, ownerId);
 
-        if (item.getOwner() == null || !Objects.equals(item.getOwner().getId(), ownerId)) {
-            throw new NotFoundException("Item not found for this owner");
-        }
+        validateNameUpdate(dto.getName());
+        validateDescriptionUpdate(dto.getDescription());
 
-        if (dto.getName() != null) {
-            if (dto.getName().isBlank()) {
-                throw new BadRequestException("Item name must not be blank");
-            }
-            item.setName(dto.getName());
-        }
-
-        if (dto.getDescription() != null) {
-            if (dto.getDescription().isBlank()) {
-                throw new BadRequestException("Item description must not be blank");
-            }
-            item.setDescription(dto.getDescription());
-        }
-
-        if (dto.getAvailable() != null) {
-            item.setAvailable(dto.getAvailable());
-        }
+        itemMapper.updateItemFromDto(dto, item);
 
         Item saved = itemRepository.save(item);
         return itemMapper.toDto(saved);
     }
 
     @Override
-    public ItemDto getById(Long userId, Long itemId) {
-        log.info("Get item id={} by userId={}", itemId, userId);
-
+    public ItemDto getById(Long itemId) {
+        log.info("Get item id={}", itemId);
         Item item = getItemOrThrow(itemId);
         return itemMapper.toDto(item);
     }
@@ -94,7 +77,6 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemDto> getByOwner(Long ownerId) {
         log.info("Get items by ownerId={}", ownerId);
-
         return itemRepository.findByOwnerId(ownerId).stream()
                 .sorted(Comparator.comparing(Item::getId))
                 .map(itemMapper::toDto)
@@ -108,6 +90,7 @@ public class ItemServiceImpl implements ItemService {
         if (text == null || text.isBlank()) {
             return List.of();
         }
+
         String query = text.toLowerCase();
 
         return itemRepository.findAll().stream()
@@ -124,5 +107,23 @@ public class ItemServiceImpl implements ItemService {
     private Item getItemOrThrow(Long itemId) {
         return itemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
+    }
+
+    private void validateOwner(Item item, Long ownerId) {
+        if (item.getOwner() == null || !Objects.equals(item.getOwner().getId(), ownerId)) {
+            throw new NotFoundException("Item not found for this owner");
+        }
+    }
+
+    private void validateNameUpdate(String name) {
+        if (name != null && name.isBlank()) {
+            throw new BadRequestException("Item name must not be blank");
+        }
+    }
+
+    private void validateDescriptionUpdate(String desc) {
+        if (desc != null && desc.isBlank()) {
+            throw new BadRequestException("Item description must not be blank");
+        }
     }
 }

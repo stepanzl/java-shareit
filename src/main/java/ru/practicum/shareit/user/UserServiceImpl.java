@@ -32,13 +32,10 @@ public class UserServiceImpl implements UserService {
     public UserDto create(UserCreateDto userDto) {
         log.info("Create user: email={}", userDto.getEmail());
 
-        if (userRepository.existsByEmail(userDto.getEmail())) {
-            throw new ConflictException("Email already exists");
-        }
+        validateEmailCreate(userDto.getEmail());
 
         User user = userMapper.toModel(userDto);
         User saved = userRepository.save(user);
-
         return userMapper.toDto(saved);
     }
 
@@ -46,26 +43,12 @@ public class UserServiceImpl implements UserService {
     public UserDto update(Long userId, UserUpdateDto userDto) {
         log.info("Update user id={}", userId);
 
-        User existing = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+        User existing = getUserOrThrow(userId);
 
-        if (userDto.getName() != null) {
-            if (userDto.getName().isBlank()) {
-                throw new BadRequestException("Name must not be blank");
-            }
-            existing.setName(userDto.getName());
-        }
+        validateNameUpdate(userDto.getName());
+        validateEmailUpdate(userDto.getEmail(), userId, existing.getEmail());
 
-        if (userDto.getEmail() != null) {
-            if (userDto.getEmail().isBlank()) {
-                throw new BadRequestException("Email must not be blank");
-            }
-            if (!userDto.getEmail().equals(existing.getEmail())
-                    && userRepository.existsByEmailAndIdNot(userDto.getEmail(), userId)) {
-                throw new ConflictException("Email already exists");
-            }
-            existing.setEmail(userDto.getEmail());
-        }
+        userMapper.updateUserFromDto(userDto, existing);
 
         User saved = userRepository.save(existing);
         return userMapper.toDto(saved);
@@ -73,18 +56,14 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDto getById(Long userId) {
-        log.info("Get user by id={}", userId);
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
+        log.info("Get user id={}", userId);
+        User user = getUserOrThrow(userId);
         return userMapper.toDto(user);
     }
 
     @Override
     public List<UserDto> getAll() {
         log.info("Get all users");
-
         return userRepository.findAll().stream()
                 .map(userMapper::toDto)
                 .collect(Collectors.toList());
@@ -93,10 +72,37 @@ public class UserServiceImpl implements UserService {
     @Override
     public void delete(Long userId) {
         log.info("Delete user id={}", userId);
+        getUserOrThrow(userId);
+        userRepository.deleteById(userId);
+    }
 
-        boolean deleted = userRepository.deleteById(userId);
-        if (!deleted) {
-            throw new NotFoundException("User not found");
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    private void validateEmailCreate(String email) {
+        if (userRepository.existsByEmail(email)) {
+            throw new ConflictException("Email already exists");
+        }
+    }
+
+    private void validateNameUpdate(String name) {
+        if (name != null && name.isBlank()) {
+            throw new BadRequestException("Name must not be blank");
+        }
+    }
+
+    private void validateEmailUpdate(String newEmail, Long userId, String currentEmail) {
+        if (newEmail == null) {
+            return;
+        }
+        if (newEmail.isBlank()) {
+            throw new BadRequestException("Email must not be blank");
+        }
+        if (!newEmail.equals(currentEmail)
+                && userRepository.existsByEmailAndIdNot(newEmail, userId)) {
+            throw new ConflictException("Email already exists");
         }
     }
 }
