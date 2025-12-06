@@ -1,110 +1,93 @@
 package ru.practicum.shareit.user;
 
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
+import ru.practicum.shareit.exception.ConflictException;
+import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.user.dto.UserDto;
 import ru.practicum.shareit.user.mapper.UserMapper;
 import ru.practicum.shareit.user.model.User;
+import ru.practicum.shareit.user.repository.UserRepository;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class UserServiceImpl implements UserService {
 
-    private final Map<Long, User> users = new ConcurrentHashMap<>();
-    private final AtomicLong idGenerator = new AtomicLong();
+    private final UserRepository userRepository;
     private final UserMapper userMapper;
 
-    public UserServiceImpl(UserMapper userMapper) {
+    public UserServiceImpl(UserRepository userRepository,
+                           UserMapper userMapper) {
+        this.userRepository = userRepository;
         this.userMapper = userMapper;
     }
 
     @Override
     public UserDto create(UserDto userDto) {
-        if (userDto == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User body is required");
-        }
+        log.info("Create user: email={}", userDto.getEmail());
 
-        if (userDto.getEmail() == null || userDto.getEmail().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email must not be empty");
-        }
-
-        boolean emailExists = users.values().stream()
-                .anyMatch(u -> u.getEmail().equals(userDto.getEmail()));
-        if (emailExists) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+        if (userRepository.existsByEmail(userDto.getEmail())) {
+            throw new ConflictException("Email already exists");
         }
 
         User user = userMapper.toModel(userDto);
-        long id = idGenerator.incrementAndGet();
-        user.setId(id);
-        users.put(id, user);
+        user.setId(null);
+        User saved = userRepository.save(user);
 
-        return userMapper.toDto(user);
+        return userMapper.toDto(saved);
+    }
+
+    @Override
+    public UserDto update(Long userId, UserDto userDto) {
+        log.info("Update user id={}", userId);
+
+        User existing = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        if (userDto.getEmail() != null && !userDto.getEmail().equals(existing.getEmail())) {
+            if (userRepository.existsByEmailAndIdNot(userDto.getEmail(), userId)) {
+                throw new ConflictException("Email already exists");
+            }
+            existing.setEmail(userDto.getEmail());
+        }
+
+        if (userDto.getName() != null) {
+            existing.setName(userDto.getName());
+        }
+
+        User saved = userRepository.save(existing);
+        return userMapper.toDto(saved);
     }
 
     @Override
     public UserDto getById(Long userId) {
-        User user = users.get(userId);
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
-        }
+        log.info("Get user by id={}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
         return userMapper.toDto(user);
     }
 
     @Override
     public List<UserDto> getAll() {
-        return users.values().stream()
+        log.info("Get all users");
+
+        return userRepository.findAll().stream()
                 .map(userMapper::toDto)
                 .collect(Collectors.toList());
     }
 
     @Override
-    public UserDto update(Long userId, UserDto userDto) {
-        User existing = users.get(userId);
-        if (existing == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
-        }
-
-        if (userDto == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User body is required");
-        }
-
-        if (userDto.getEmail() != null) {
-            if (userDto.getEmail().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email must not be empty");
-            }
-
-            boolean emailExists = users.values().stream()
-                    .anyMatch(u -> !u.getId().equals(userId)
-                            && u.getEmail().equals(userDto.getEmail()));
-            if (emailExists) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
-            }
-
-            existing.setEmail(userDto.getEmail());
-        }
-
-        if (userDto.getName() != null) {
-            if (userDto.getName().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name must not be empty");
-            }
-            existing.setName(userDto.getName());
-        }
-
-        return userMapper.toDto(existing);
-    }
-
-    @Override
     public void delete(Long userId) {
-        User removed = users.remove(userId);
-        if (removed == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        log.info("Delete user id={}", userId);
+
+        boolean deleted = userRepository.deleteById(userId);
+        if (!deleted) {
+            throw new NotFoundException("User not found");
         }
     }
 }

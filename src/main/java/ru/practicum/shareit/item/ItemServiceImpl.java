@@ -1,55 +1,62 @@
 package ru.practicum.shareit.item;
 
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
+import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.dto.ItemDto;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Item;
+import ru.practicum.shareit.item.repository.ItemRepository;
 import ru.practicum.shareit.user.UserService;
 import ru.practicum.shareit.user.dto.UserDto;
 import ru.practicum.shareit.user.model.User;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class ItemServiceImpl implements ItemService {
 
     private final ItemMapper itemMapper;
     private final UserService userService;
+    private final ItemRepository itemRepository;
 
-    private final Map<Long, Item> items = new HashMap<>();
-    private long nextId = 1L;
-
-    public ItemServiceImpl(ItemMapper itemMapper, UserService userService) {
+    public ItemServiceImpl(ItemMapper itemMapper,
+                           UserService userService,
+                           ItemRepository itemRepository) {
         this.itemMapper = itemMapper;
         this.userService = userService;
+        this.itemRepository = itemRepository;
     }
 
     @Override
     public ItemDto create(Long ownerId, ItemDto dto) {
+        log.info("Create item by ownerId={}", ownerId);
+
         UserDto ownerDto = userService.getById(ownerId);
 
         Item item = itemMapper.toModel(dto);
-        item.setId(nextId++);
+        item.setId(null);
 
         User owner = new User();
         owner.setId(ownerDto.getId());
         item.setOwner(owner);
 
-        items.put(item.getId(), item);
-
-        return itemMapper.toDto(item);
+        Item saved = itemRepository.save(item);
+        return itemMapper.toDto(saved);
     }
 
     @Override
     public ItemDto update(Long ownerId, Long itemId, ItemDto dto) {
+        log.info("Update item id={} by ownerId={}", itemId, ownerId);
+
         Item item = getItemOrThrow(itemId);
 
         if (item.getOwner() == null || !Objects.equals(item.getOwner().getId(), ownerId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Item not found for this owner");
+            throw new NotFoundException("Item not found for this owner");
         }
 
         if (dto.getName() != null && !dto.getName().isBlank()) {
@@ -62,21 +69,23 @@ public class ItemServiceImpl implements ItemService {
             item.setAvailable(dto.getAvailable());
         }
 
-        return itemMapper.toDto(item);
+        Item saved = itemRepository.save(item);
+        return itemMapper.toDto(saved);
     }
 
     @Override
     public ItemDto getById(Long userId, Long itemId) {
+        log.info("Get item id={} by userId={}", itemId, userId);
+
         Item item = getItemOrThrow(itemId);
-        // userId сейчас не используем, но параметр оставляем — так требуют тесты
         return itemMapper.toDto(item);
     }
 
     @Override
     public List<ItemDto> getByOwner(Long ownerId) {
-        return items.values().stream()
-                .filter(item -> item.getOwner() != null
-                        && Objects.equals(item.getOwner().getId(), ownerId))
+        log.info("Get items by ownerId={}", ownerId);
+
+        return itemRepository.findByOwnerId(ownerId).stream()
                 .sorted(Comparator.comparing(Item::getId))
                 .map(itemMapper::toDto)
                 .collect(Collectors.toList());
@@ -84,29 +93,26 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public List<ItemDto> search(String text) {
+        log.info("Search items by text='{}'", text);
+
         if (text == null || text.isBlank()) {
             return List.of();
         }
         String query = text.toLowerCase();
 
-        return items.values().stream()
+        return itemRepository.findAll().stream()
                 .filter(Item::isAvailable)
                 .filter(item ->
-                        (item.getName() != null
-                                && item.getName().toLowerCase().contains(query))
+                        (item.getName() != null && item.getName().toLowerCase().contains(query))
                                 || (item.getDescription() != null
-                                && item.getDescription().toLowerCase().contains(query))
-                )
+                                && item.getDescription().toLowerCase().contains(query)))
                 .sorted(Comparator.comparing(Item::getId))
                 .map(itemMapper::toDto)
                 .collect(Collectors.toList());
     }
 
     private Item getItemOrThrow(Long itemId) {
-        Item item = items.get(itemId);
-        if (item == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found");
-        }
-        return item;
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new NotFoundException("Item not found"));
     }
 }
