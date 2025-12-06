@@ -2,9 +2,12 @@ package ru.practicum.shareit.user;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.ConflictException;
 import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.user.dto.UserCreateDto;
 import ru.practicum.shareit.user.dto.UserDto;
+import ru.practicum.shareit.user.dto.UserUpdateDto;
 import ru.practicum.shareit.user.mapper.UserMapper;
 import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.repository.UserRepository;
@@ -26,7 +29,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserDto create(UserDto userDto) {
+    public UserDto create(UserCreateDto userDto) {
         log.info("Create user: email={}", userDto.getEmail());
 
         if (userRepository.existsByEmail(userDto.getEmail())) {
@@ -34,28 +37,34 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = userMapper.toModel(userDto);
-        user.setId(null);
         User saved = userRepository.save(user);
 
         return userMapper.toDto(saved);
     }
 
     @Override
-    public UserDto update(Long userId, UserDto userDto) {
+    public UserDto update(Long userId, UserUpdateDto userDto) {
         log.info("Update user id={}", userId);
 
         User existing = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        if (userDto.getEmail() != null && !userDto.getEmail().equals(existing.getEmail())) {
-            if (userRepository.existsByEmailAndIdNot(userDto.getEmail(), userId)) {
+        if (userDto.getName() != null) {
+            if (userDto.getName().isBlank()) {
+                throw new BadRequestException("Name must not be blank");
+            }
+            existing.setName(userDto.getName());
+        }
+
+        if (userDto.getEmail() != null) {
+            if (userDto.getEmail().isBlank()) {
+                throw new BadRequestException("Email must not be blank");
+            }
+            if (!userDto.getEmail().equals(existing.getEmail())
+                    && userRepository.existsByEmailAndIdNot(userDto.getEmail(), userId)) {
                 throw new ConflictException("Email already exists");
             }
             existing.setEmail(userDto.getEmail());
-        }
-
-        if (userDto.getName() != null) {
-            existing.setName(userDto.getName());
         }
 
         User saved = userRepository.save(existing);

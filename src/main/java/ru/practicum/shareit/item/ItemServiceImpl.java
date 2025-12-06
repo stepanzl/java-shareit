@@ -2,8 +2,11 @@ package ru.practicum.shareit.item;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.item.dto.ItemCreateDto;
 import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.item.dto.ItemUpdateDto;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.repository.ItemRepository;
@@ -33,13 +36,12 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
-    public ItemDto create(Long ownerId, ItemDto dto) {
+    public ItemDto create(Long ownerId, ItemCreateDto dto) {
         log.info("Create item by ownerId={}", ownerId);
 
         UserDto ownerDto = userService.getById(ownerId);
 
         Item item = itemMapper.toModel(dto);
-        item.setId(null);
 
         User owner = new User();
         owner.setId(ownerDto.getId());
@@ -50,7 +52,7 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
-    public ItemDto update(Long ownerId, Long itemId, ItemDto dto) {
+    public ItemDto update(Long ownerId, Long itemId, ItemUpdateDto dto) {
         log.info("Update item id={} by ownerId={}", itemId, ownerId);
 
         Item item = getItemOrThrow(itemId);
@@ -59,12 +61,20 @@ public class ItemServiceImpl implements ItemService {
             throw new NotFoundException("Item not found for this owner");
         }
 
-        if (dto.getName() != null && !dto.getName().isBlank()) {
+        if (dto.getName() != null) {
+            if (dto.getName().isBlank()) {
+                throw new BadRequestException("Item name must not be blank");
+            }
             item.setName(dto.getName());
         }
-        if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
+
+        if (dto.getDescription() != null) {
+            if (dto.getDescription().isBlank()) {
+                throw new BadRequestException("Item description must not be blank");
+            }
             item.setDescription(dto.getDescription());
         }
+
         if (dto.getAvailable() != null) {
             item.setAvailable(dto.getAvailable());
         }
