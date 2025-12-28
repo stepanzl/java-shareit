@@ -1,18 +1,25 @@
 package ru.practicum.shareit.item;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.shareit.booking.mapper.BookingMapper;
+import ru.practicum.shareit.booking.model.BookingStatus;
 import ru.practicum.shareit.booking.repository.BookingRepository;
 import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.item.dto.CommentCreateDto;
+import ru.practicum.shareit.item.dto.CommentDto;
 import ru.practicum.shareit.item.dto.ItemCreateDto;
 import ru.practicum.shareit.item.dto.ItemDto;
 import ru.practicum.shareit.item.dto.ItemOwnerDto;
 import ru.practicum.shareit.item.dto.ItemUpdateDto;
+import ru.practicum.shareit.item.mapper.CommentMapper;
 import ru.practicum.shareit.item.mapper.ItemMapper;
+import ru.practicum.shareit.item.model.Comment;
 import ru.practicum.shareit.item.model.Item;
+import ru.practicum.shareit.item.repository.CommentRepository;
 import ru.practicum.shareit.item.repository.ItemRepository;
 import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.repository.UserRepository;
@@ -20,6 +27,7 @@ import ru.practicum.shareit.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -28,22 +36,30 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ItemServiceImpl implements ItemService {
 
+    private static final Sort COMMENTS_SORT = Sort.by(Sort.Direction.ASC, "created");
+
     private final ItemMapper itemMapper;
     private final BookingMapper bookingMapper;
+    private final CommentMapper commentMapper;
     private final UserRepository userRepository;
     private final ItemRepository itemRepository;
     private final BookingRepository bookingRepository;
+    private final CommentRepository commentRepository;
 
     public ItemServiceImpl(ItemMapper itemMapper,
                            UserRepository userRepository,
                            ItemRepository itemRepository,
                            BookingRepository bookingRepository,
-                           BookingMapper bookingMapper) {
+                           BookingMapper bookingMapper,
+                           CommentRepository commentRepository,
+                           CommentMapper commentMapper) {
         this.itemMapper = itemMapper;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
+        this.commentRepository = commentRepository;
+        this.commentMapper = commentMapper;
     }
 
     @Transactional
@@ -59,7 +75,9 @@ public class ItemServiceImpl implements ItemService {
         item.setOwner(owner);
 
         Item saved = itemRepository.save(item);
-        return itemMapper.toDto(saved);
+        ItemDto result = itemMapper.toDto(saved);
+        result.setComments(List.of());
+        return result;
     }
 
     @Transactional
@@ -76,14 +94,18 @@ public class ItemServiceImpl implements ItemService {
         itemMapper.updateItemFromDto(dto, item);
 
         Item saved = itemRepository.save(item);
-        return itemMapper.toDto(saved);
+        ItemDto result = itemMapper.toDto(saved);
+        result.setComments(loadCommentsForItem(itemId));
+        return result;
     }
 
     @Override
     public ItemDto getById(Long itemId) {
         log.info("Get item id={}", itemId);
         Item item = getItemOrThrow(itemId);
-        return itemMapper.toDto(item);
+        ItemDto dto = itemMapper.toDto(item);
+        dto.setComments(loadCommentsForItem(itemId));
+        return dto;
     }
 
     @Override
@@ -93,8 +115,14 @@ public class ItemServiceImpl implements ItemService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        return itemRepository.findAllByOwner_Id(ownerId).stream()
-                .map(item -> toOwnerDto(item, now))
+        List<Item> items = itemRepository.findAllByOwner_Id(ownerId);
+
+        Map<Long, List<CommentDto>> commentsByItemId = loadCommentsForItems(
+                items.stream().map(Item::getId).toList()
+        );
+
+        return items.stream()
+                .map(item -> toOwnerDto(item, now, commentsByItemId.getOrDefault(item.getId(), List.of())))
                 .toList();
     }
 
@@ -119,7 +147,40 @@ public class ItemServiceImpl implements ItemService {
         return itemRepository.search(text).stream()
                 .sorted(Comparator.comparing(Item::getId))
                 .map(itemMapper::toDto)
-                .collect(Collectors.toList());
+                .peek(dto -> dto.setComments(loadCommentsForItem(dto.getId())))
+                .toList();
+    }
+
+    @Transactional
+    @Override
+    public CommentDto addComment(Long authorId, Long itemId, CommentCreateDto dto) {
+        log.info("Add comment: authorId={}, itemId={}", authorId, itemId);
+
+        if (dto.getText() == null || dto.getText().isBlank()) {
+            throw new BadRequestException("Comment text must not be blank");
+        }
+
+        User author = getUserOrThrow(authorId);
+        Item item = getItemOrThrow(itemId);
+
+        boolean hasPastApprovedBooking = bookingRepository.existsByItem_IdAndBooker_IdAndStatusAndEndIsBefore(
+                itemId,
+                authorId,
+                BookingStatus.APPROVED,
+                LocalDateTime.now()
+        );
+
+        if (!hasPastApprovedBooking) {
+            throw new BadRequestException("User has not completed approved booking for this item");
+        }
+
+        Comment comment = new Comment();
+        comment.setText(dto.getText());
+        comment.setAuthor(author);
+        comment.setItem(item);
+
+        Comment saved = commentRepository.save(comment);
+        return commentMapper.toDto(saved);
     }
 
     private User getUserOrThrow(Long userId) {
@@ -163,27 +224,48 @@ public class ItemServiceImpl implements ItemService {
     }
 
     private ItemOwnerDto toOwnerDto(Item item, LocalDateTime now) {
+        return toOwnerDto(item, now, loadCommentsForItem(item.getId()));
+    }
+
+    private ItemOwnerDto toOwnerDto(Item item, LocalDateTime now, List<CommentDto> comments) {
         ItemOwnerDto dto = new ItemOwnerDto();
         dto.setId(item.getId());
         dto.setName(item.getName());
         dto.setDescription(item.getDescription());
         dto.setAvailable(item.isAvailable());
+        dto.setComments(comments);
 
-        bookingRepository.findLastBooking(
-                        item.getId(),
-                        now)
-                .stream().findFirst()
+        bookingRepository.findLastBooking(item.getId(), now).stream()
+                .findFirst()
                 .map(bookingMapper::toDto)
                 .ifPresent(dto::setLastBooking);
 
-        bookingRepository.findNextBooking(
-                        item.getId(),
-                        now)
-                .stream().findFirst()
+        bookingRepository.findNextBooking(item.getId(), now).stream()
+                .findFirst()
                 .map(bookingMapper::toDto)
                 .ifPresent(dto::setNextBooking);
 
         return dto;
+    }
+
+
+    private List<CommentDto> loadCommentsForItem(Long itemId) {
+        return commentRepository.findAllByItem_Id(itemId, COMMENTS_SORT).stream()
+                .map(commentMapper::toDto)
+                .toList();
+    }
+
+
+    private Map<Long, List<CommentDto>> loadCommentsForItems(List<Long> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return commentRepository.findAllByItem_IdIn(itemIds, COMMENTS_SORT).stream()
+                .collect(Collectors.groupingBy(
+                        c -> c.getItem().getId(),
+                        Collectors.mapping(commentMapper::toDto, Collectors.toList())
+                ));
     }
 
 }
