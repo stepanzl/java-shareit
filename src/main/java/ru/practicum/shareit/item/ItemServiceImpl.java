@@ -100,11 +100,27 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
-    public ItemDto getById(Long itemId) {
-        log.info("Get item id={}", itemId);
+    public ItemDto getById(Long userId, Long itemId) {
+        log.info("Get item id={} by userId={}", itemId, userId);
+
         Item item = getItemOrThrow(itemId);
         ItemDto dto = itemMapper.toDto(item);
         dto.setComments(loadCommentsForItem(itemId));
+
+        if (userId != null && item.getOwner() != null && Objects.equals(item.getOwner().getId(), userId)) {
+            LocalDateTime now = LocalDateTime.now();
+
+            bookingRepository.findLastBooking(item.getId(), now).stream()
+                    .findFirst()
+                    .map(bookingMapper::toDto)
+                    .ifPresent(dto::setLastBooking);
+
+            bookingRepository.findNextBooking(item.getId(), now).stream()
+                    .findFirst()
+                    .map(bookingMapper::toDto)
+                    .ifPresent(dto::setNextBooking);
+        }
+
         return dto;
     }
 
@@ -124,16 +140,6 @@ public class ItemServiceImpl implements ItemService {
         return items.stream()
                 .map(item -> toOwnerDto(item, now, commentsByItemId.getOrDefault(item.getId(), List.of())))
                 .toList();
-    }
-
-    @Override
-    public ItemOwnerDto getByIdForOwner(Long ownerId, Long itemId) {
-        log.info("Get item with bookings itemId={} by ownerId={}", itemId, ownerId);
-
-        Item item = getItemOrThrow(itemId);
-        validateOwner(item, ownerId);
-
-        return toOwnerDto(item, LocalDateTime.now());
     }
 
     @Override
@@ -223,10 +229,6 @@ public class ItemServiceImpl implements ItemService {
         }
     }
 
-    private ItemOwnerDto toOwnerDto(Item item, LocalDateTime now) {
-        return toOwnerDto(item, now, loadCommentsForItem(item.getId()));
-    }
-
     private ItemOwnerDto toOwnerDto(Item item, LocalDateTime now, List<CommentDto> comments) {
         ItemOwnerDto dto = new ItemOwnerDto();
         dto.setId(item.getId());
@@ -247,7 +249,6 @@ public class ItemServiceImpl implements ItemService {
 
         return dto;
     }
-
 
     private List<CommentDto> loadCommentsForItem(Long itemId) {
         return commentRepository.findAllByItem_Id(itemId, COMMENTS_SORT).stream()
