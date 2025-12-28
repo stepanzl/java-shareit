@@ -2,6 +2,7 @@ package ru.practicum.shareit.item;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.dto.ItemCreateDto;
@@ -10,9 +11,8 @@ import ru.practicum.shareit.item.dto.ItemUpdateDto;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.repository.ItemRepository;
-import ru.practicum.shareit.user.UserService;
-import ru.practicum.shareit.user.dto.UserDto;
 import ru.practicum.shareit.user.model.User;
+import ru.practicum.shareit.user.repository.UserRepository;
 
 import java.util.Comparator;
 import java.util.List;
@@ -21,36 +21,38 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@Transactional(readOnly = true)
 public class ItemServiceImpl implements ItemService {
 
     private final ItemMapper itemMapper;
-    private final UserService userService;
+    private final UserRepository userRepository;
     private final ItemRepository itemRepository;
 
     public ItemServiceImpl(ItemMapper itemMapper,
-                           UserService userService,
+                           UserRepository userRepository,
                            ItemRepository itemRepository) {
         this.itemMapper = itemMapper;
-        this.userService = userService;
+        this.userRepository = userRepository;
         this.itemRepository = itemRepository;
     }
 
+    @Transactional
     @Override
     public ItemDto create(Long ownerId, ItemCreateDto dto) {
         log.info("Create item by ownerId={}", ownerId);
 
-        UserDto ownerDto = userService.getById(ownerId);
+        validateCreate(dto);
+
+        User owner = getUserOrThrow(ownerId);
 
         Item item = itemMapper.toModel(dto);
-
-        User owner = new User();
-        owner.setId(ownerDto.getId());
         item.setOwner(owner);
 
         Item saved = itemRepository.save(item);
         return itemMapper.toDto(saved);
     }
 
+    @Transactional
     @Override
     public ItemDto update(Long ownerId, Long itemId, ItemUpdateDto dto) {
         log.info("Update item id={} by ownerId={}", itemId, ownerId);
@@ -77,7 +79,9 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemDto> getByOwner(Long ownerId) {
         log.info("Get items by ownerId={}", ownerId);
-        return itemRepository.findByOwnerId(ownerId).stream()
+        getUserOrThrow(ownerId);
+
+        return itemRepository.findAllByOwner_Id(ownerId).stream()
                 .sorted(Comparator.comparing(Item::getId))
                 .map(itemMapper::toDto)
                 .collect(Collectors.toList());
@@ -91,17 +95,15 @@ public class ItemServiceImpl implements ItemService {
             return List.of();
         }
 
-        String query = text.toLowerCase();
-
-        return itemRepository.findAll().stream()
-                .filter(Item::isAvailable)
-                .filter(item ->
-                        (item.getName() != null && item.getName().toLowerCase().contains(query))
-                                || (item.getDescription() != null
-                                && item.getDescription().toLowerCase().contains(query)))
+        return itemRepository.search(text).stream()
                 .sorted(Comparator.comparing(Item::getId))
                 .map(itemMapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     private Item getItemOrThrow(Long itemId) {
@@ -112,6 +114,18 @@ public class ItemServiceImpl implements ItemService {
     private void validateOwner(Item item, Long ownerId) {
         if (item.getOwner() == null || !Objects.equals(item.getOwner().getId(), ownerId)) {
             throw new NotFoundException("Item not found for this owner");
+        }
+    }
+
+    private void validateCreate(ItemCreateDto dto) {
+        if (dto.getName() == null || dto.getName().isBlank()) {
+            throw new BadRequestException("Item name must not be blank");
+        }
+        if (dto.getDescription() == null || dto.getDescription().isBlank()) {
+            throw new BadRequestException("Item description must not be blank");
+        }
+        if (dto.getAvailable() == null) {
+            throw new BadRequestException("Item availability must be provided");
         }
     }
 
