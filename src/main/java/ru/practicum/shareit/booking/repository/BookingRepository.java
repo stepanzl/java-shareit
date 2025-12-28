@@ -20,11 +20,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByBooker_IdAndStartIsAfter(Long bookerId, LocalDateTime time, Sort sort);
 
     @Query("""
-           select b from Booking b
-           where b.booker.id = ?1
-             and b.start <= ?2
-             and b.end >= ?2
-           """)
+            select b from Booking b
+            where b.booker.id = ?1
+              and b.start <= ?2
+              and b.end >= ?2
+            """)
     List<Booking> findCurrentByBooker(Long bookerId, LocalDateTime now, Sort sort);
 
     List<Booking> findByBooker_IdAndStatus(Long bookerId, BookingStatus status, Sort sort);
@@ -32,58 +32,58 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // -------- Owner views --------
 
     @Query("""
-           select b from Booking b
-           where b.item.owner.id = ?1
-           """)
+            select b from Booking b
+            where b.item.owner.id = ?1
+            """)
     List<Booking> findByOwner(Long ownerId, Sort sort);
 
     @Query("""
-           select b from Booking b
-           where b.item.owner.id = ?1
-             and b.end < ?2
-           """)
+            select b from Booking b
+            where b.item.owner.id = ?1
+              and b.end < ?2
+            """)
     List<Booking> findPastByOwner(Long ownerId, LocalDateTime time, Sort sort);
 
     @Query("""
-           select b from Booking b
-           where b.item.owner.id = ?1
-             and b.start > ?2
-           """)
+            select b from Booking b
+            where b.item.owner.id = ?1
+              and b.start > ?2
+            """)
     List<Booking> findFutureByOwner(Long ownerId, LocalDateTime time, Sort sort);
 
     @Query("""
-           select b from Booking b
-           where b.item.owner.id = ?1
-             and b.start <= ?2
-             and b.end >= ?2
-           """)
+            select b from Booking b
+            where b.item.owner.id = ?1
+              and b.start <= ?2
+              and b.end >= ?2
+            """)
     List<Booking> findCurrentByOwner(Long ownerId, LocalDateTime now, Sort sort);
 
     @Query("""
-           select b from Booking b
-           where b.item.owner.id = ?1
-             and b.status = ?2
-           """)
+            select b from Booking b
+            where b.item.owner.id = ?1
+              and b.status = ?2
+            """)
     List<Booking> findByOwnerAndStatus(Long ownerId, BookingStatus status, Sort sort);
 
     // -------- Item helpers --------
 
     @Query("""
-           select b from Booking b
-           where b.item.id = ?1
-             and b.start < ?2
-             and b.status = 'APPROVED'
-           order by b.start desc
-           """)
+            select b from Booking b
+            where b.item.id = ?1
+              and b.start < ?2
+              and b.status = 'APPROVED'
+            order by b.start desc
+            """)
     List<Booking> findLastBooking(Long itemId, LocalDateTime now);
 
     @Query("""
-           select b from Booking b
-           where b.item.id = ?1
-             and b.start > ?2
-             and b.status = 'APPROVED'
-           order by b.start asc
-           """)
+            select b from Booking b
+            where b.item.id = ?1
+              and b.start > ?2
+              and b.status = 'APPROVED'
+            order by b.start asc
+            """)
     List<Booking> findNextBooking(Long itemId, LocalDateTime now);
 
     boolean existsByItem_IdAndBooker_IdAndStatusAndEndIsBefore(
