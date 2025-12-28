@@ -75,7 +75,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
              and b.status = 'APPROVED'
            order by b.start desc
            """)
-    List<Booking> findLastBooking(Long itemId, LocalDateTime now, Sort sort);
+    List<Booking> findLastBooking(Long itemId, LocalDateTime now);
 
     @Query("""
            select b from Booking b
@@ -84,5 +84,5 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
              and b.status = 'APPROVED'
            order by b.start asc
            """)
-    List<Booking> findNextBooking(Long itemId, LocalDateTime now, Sort sort);
+    List<Booking> findNextBooking(Long itemId, LocalDateTime now);
 }

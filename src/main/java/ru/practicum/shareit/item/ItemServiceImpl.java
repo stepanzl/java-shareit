@@ -3,10 +3,13 @@ package ru.practicum.shareit.item;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.shareit.booking.mapper.BookingMapper;
+import ru.practicum.shareit.booking.repository.BookingRepository;
 import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.dto.ItemCreateDto;
 import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.item.dto.ItemOwnerDto;
 import ru.practicum.shareit.item.dto.ItemUpdateDto;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Item;
@@ -14,6 +17,7 @@ import ru.practicum.shareit.item.repository.ItemRepository;
 import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.repository.UserRepository;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -25,15 +29,21 @@ import java.util.stream.Collectors;
 public class ItemServiceImpl implements ItemService {
 
     private final ItemMapper itemMapper;
+    private final BookingMapper bookingMapper;
     private final UserRepository userRepository;
     private final ItemRepository itemRepository;
+    private final BookingRepository bookingRepository;
 
     public ItemServiceImpl(ItemMapper itemMapper,
                            UserRepository userRepository,
-                           ItemRepository itemRepository) {
+                           ItemRepository itemRepository,
+                           BookingRepository bookingRepository,
+                           BookingMapper bookingMapper) {
         this.itemMapper = itemMapper;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
+        this.bookingRepository = bookingRepository;
+        this.bookingMapper = bookingMapper;
     }
 
     @Transactional
@@ -77,14 +87,25 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
-    public List<ItemDto> getByOwner(Long ownerId) {
-        log.info("Get items by ownerId={}", ownerId);
+    public List<ItemOwnerDto> getByOwner(Long ownerId) {
+        log.info("Get items with bookings by ownerId={}", ownerId);
         getUserOrThrow(ownerId);
 
+        LocalDateTime now = LocalDateTime.now();
+
         return itemRepository.findAllByOwner_Id(ownerId).stream()
-                .sorted(Comparator.comparing(Item::getId))
-                .map(itemMapper::toDto)
-                .collect(Collectors.toList());
+                .map(item -> toOwnerDto(item, now))
+                .toList();
+    }
+
+    @Override
+    public ItemOwnerDto getByIdForOwner(Long ownerId, Long itemId) {
+        log.info("Get item with bookings itemId={} by ownerId={}", itemId, ownerId);
+
+        Item item = getItemOrThrow(itemId);
+        validateOwner(item, ownerId);
+
+        return toOwnerDto(item, LocalDateTime.now());
     }
 
     @Override
@@ -140,4 +161,29 @@ public class ItemServiceImpl implements ItemService {
             throw new BadRequestException("Item description must not be blank");
         }
     }
+
+    private ItemOwnerDto toOwnerDto(Item item, LocalDateTime now) {
+        ItemOwnerDto dto = new ItemOwnerDto();
+        dto.setId(item.getId());
+        dto.setName(item.getName());
+        dto.setDescription(item.getDescription());
+        dto.setAvailable(item.isAvailable());
+
+        bookingRepository.findLastBooking(
+                        item.getId(),
+                        now)
+                .stream().findFirst()
+                .map(bookingMapper::toDto)
+                .ifPresent(dto::setLastBooking);
+
+        bookingRepository.findNextBooking(
+                        item.getId(),
+                        now)
+                .stream().findFirst()
+                .map(bookingMapper::toDto)
+                .ifPresent(dto::setNextBooking);
+
+        return dto;
+    }
+
 }

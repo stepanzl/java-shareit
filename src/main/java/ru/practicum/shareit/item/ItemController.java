@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.practicum.shareit.item.dto.ItemCreateDto;
 import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.item.dto.ItemOwnerDto;
 import ru.practicum.shareit.item.dto.ItemUpdateDto;
 
 import java.util.List;
@@ -49,7 +50,7 @@ public class ItemController {
     }
 
     @GetMapping
-    public List<ItemDto> getByOwner(@RequestHeader("X-Sharer-User-Id") Long userId) {
+    public List<ItemOwnerDto> getByOwner(@RequestHeader("X-Sharer-User-Id") Long userId) {
         log.info("GET /items userId={}", userId);
         return itemService.getByOwner(userId);
     }
