@@ -1,5 +1,6 @@
 package ru.practicum.shareit.booking;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -25,19 +26,12 @@ import java.util.List;
 @Slf4j
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final ItemRepository itemRepository;
     private final UserRepository userRepository;
-
-    public BookingServiceImpl(BookingRepository bookingRepository,
-                              ItemRepository itemRepository,
-                              UserRepository userRepository) {
-        this.bookingRepository = bookingRepository;
-        this.itemRepository = itemRepository;
-        this.userRepository = userRepository;
-    }
 
     @Override
     @Transactional
@@ -54,6 +48,16 @@ public class BookingServiceImpl implements BookingService {
         }
         if (!dto.getEnd().isAfter(dto.getStart())) {
             throw new BadRequestException("End must be after start");
+        }
+        boolean hasOverlap = bookingRepository
+                .existsByItem_IdAndStatusInAndStartLessThanAndEndGreaterThan(
+                        item.getId(),
+                        List.of(BookingStatus.WAITING, BookingStatus.APPROVED),
+                        dto.getEnd(),
+                        dto.getStart()
+                );
+        if (hasOverlap) {
+            throw new BadRequestException("Booking intersects with existing booking");
         }
 
         Booking booking = BookingMapper.toEntity(dto, item, booker);
@@ -125,8 +129,8 @@ public class BookingServiceImpl implements BookingService {
             case CURRENT -> bookingRepository.findCurrentByOwner(ownerId, now, sort);
             case PAST -> bookingRepository.findPastByOwner(ownerId, now, sort);
             case FUTURE -> bookingRepository.findFutureByOwner(ownerId, now, sort);
-            case WAITING -> bookingRepository.findByOwnerAndStatus(ownerId, BookingStatus.WAITING, sort);
-            case REJECTED -> bookingRepository.findByOwnerAndStatus(ownerId, BookingStatus.REJECTED, sort);
+            case WAITING -> bookingRepository.findByItem_Owner_IdAndStatus(ownerId, BookingStatus.WAITING, sort);
+            case REJECTED -> bookingRepository.findByItem_Owner_IdAndStatus(ownerId, BookingStatus.REJECTED, sort);
         };
     }
 

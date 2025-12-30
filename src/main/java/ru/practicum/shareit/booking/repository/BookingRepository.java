@@ -7,6 +7,7 @@ import ru.practicum.shareit.booking.model.Booking;
 import ru.practicum.shareit.booking.model.BookingStatus;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
@@ -59,12 +60,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             """)
     List<Booking> findCurrentByOwner(Long ownerId, LocalDateTime now, Sort sort);
 
-    @Query("""
-            select b from Booking b
-            where b.item.owner.id = ?1
-              and b.status = ?2
-            """)
-    List<Booking> findByOwnerAndStatus(Long ownerId, BookingStatus status, Sort sort);
+    List<Booking> findByItem_Owner_IdAndStatus(
+            Long ownerId,
+            BookingStatus status,
+            Sort sort
+    );
 
     // -------- Item helpers --------
 
@@ -91,5 +91,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             Long bookerId,
             BookingStatus status,
             LocalDateTime time
+    );
+
+    boolean existsByItem_IdAndStatusInAndStartLessThanAndEndGreaterThan(
+            Long itemId,
+            Collection<BookingStatus> statuses,
+            LocalDateTime end,
+            LocalDateTime start
     );
 }
