@@ -39,7 +39,6 @@ public class ItemServiceImpl implements ItemService {
     private static final Sort COMMENTS_SORT = Sort.by(Sort.Direction.ASC, "created");
 
     private final ItemMapper itemMapper;
-    private final BookingMapper bookingMapper;
     private final CommentMapper commentMapper;
     private final UserRepository userRepository;
     private final ItemRepository itemRepository;
@@ -50,14 +49,12 @@ public class ItemServiceImpl implements ItemService {
                            UserRepository userRepository,
                            ItemRepository itemRepository,
                            BookingRepository bookingRepository,
-                           BookingMapper bookingMapper,
                            CommentRepository commentRepository,
                            CommentMapper commentMapper) {
         this.itemMapper = itemMapper;
         this.userRepository = userRepository;
         this.itemRepository = itemRepository;
         this.bookingRepository = bookingRepository;
-        this.bookingMapper = bookingMapper;
         this.commentRepository = commentRepository;
         this.commentMapper = commentMapper;
     }
@@ -112,12 +109,12 @@ public class ItemServiceImpl implements ItemService {
 
             bookingRepository.findLastBooking(item.getId(), now).stream()
                     .findFirst()
-                    .map(bookingMapper::toDto)
+                    .map(BookingMapper::toDto)
                     .ifPresent(dto::setLastBooking);
 
             bookingRepository.findNextBooking(item.getId(), now).stream()
                     .findFirst()
-                    .map(bookingMapper::toDto)
+                    .map(BookingMapper::toDto)
                     .ifPresent(dto::setNextBooking);
         }
 
@@ -239,12 +236,12 @@ public class ItemServiceImpl implements ItemService {
 
         bookingRepository.findLastBooking(item.getId(), now).stream()
                 .findFirst()
-                .map(bookingMapper::toDto)
+                .map(BookingMapper::toDto)
                 .ifPresent(dto::setLastBooking);
 
         bookingRepository.findNextBooking(item.getId(), now).stream()
                 .findFirst()
-                .map(bookingMapper::toDto)
+                .map(BookingMapper::toDto)
                 .ifPresent(dto::setNextBooking);
 
         return dto;

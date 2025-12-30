@@ -30,16 +30,13 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final ItemRepository itemRepository;
     private final UserRepository userRepository;
-    private final BookingMapper bookingMapper;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                               ItemRepository itemRepository,
-                              UserRepository userRepository,
-                              BookingMapper bookingMapper) {
+                              UserRepository userRepository) {
         this.bookingRepository = bookingRepository;
         this.itemRepository = itemRepository;
         this.userRepository = userRepository;
-        this.bookingMapper = bookingMapper;
     }
 
     @Override
@@ -59,14 +56,9 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("End must be after start");
         }
 
-        Booking booking = new Booking();
-        booking.setItem(item);
-        booking.setBooker(booker);
-        booking.setStart(dto.getStart());
-        booking.setEnd(dto.getEnd());
-        booking.setStatus(BookingStatus.WAITING);
+        Booking booking = BookingMapper.toEntity(dto, item, booker);
 
-        return bookingMapper.toDto(bookingRepository.save(booking));
+        return BookingMapper.toDto(bookingRepository.save(booking));
     }
 
     @Override
@@ -82,7 +74,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         booking.setStatus(approved ? BookingStatus.APPROVED : BookingStatus.REJECTED);
-        return bookingMapper.toDto(bookingRepository.save(booking));
+        return BookingMapper.toDto(bookingRepository.save(booking));
     }
 
     @Override
@@ -93,7 +85,7 @@ public class BookingServiceImpl implements BookingService {
                 && !booking.getItem().getOwner().getId().equals(userId)) {
             throw new NotFoundException("Booking not accessible");
         }
-        return bookingMapper.toDto(booking);
+        return BookingMapper.toDto(booking);
     }
 
     @Override
@@ -139,7 +131,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private List<BookingDto> map(List<Booking> bookings) {
-        return bookings.stream().map(bookingMapper::toDto).toList();
+        return bookings.stream().map(BookingMapper::toDto).toList();
     }
 
     private Booking getBooking(Long bookingId) {
