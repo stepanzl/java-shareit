@@ -12,8 +12,6 @@ import java.util.List;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
-    // -------- Booker views --------
-
     List<Booking> findByBooker_Id(Long bookerId, Sort sort);
 
     List<Booking> findByBooker_IdAndEndIsBefore(Long bookerId, LocalDateTime time, Sort sort);
@@ -29,8 +27,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findCurrentByBooker(Long bookerId, LocalDateTime now, Sort sort);
 
     List<Booking> findByBooker_IdAndStatus(Long bookerId, BookingStatus status, Sort sort);
-
-    // -------- Owner views --------
 
     @Query("""
             select b from Booking b
@@ -65,8 +61,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             BookingStatus status,
             Sort sort
     );
-
-    // -------- Item helpers --------
 
     List<Booking> findByItem_IdInAndStatus(List<Long> itemIds, BookingStatus status, Sort sort);
 

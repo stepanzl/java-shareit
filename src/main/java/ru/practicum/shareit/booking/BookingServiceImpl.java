@@ -104,7 +104,6 @@ public class BookingServiceImpl implements BookingService {
         return map(selectByOwner(ownerId, state));
     }
 
-    // -------- helpers --------
 
     private List<Booking> selectByBooker(Long bookerId, BookingState state) {
         LocalDateTime now = LocalDateTime.now();
