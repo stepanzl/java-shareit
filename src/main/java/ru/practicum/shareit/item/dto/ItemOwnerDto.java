@@ -6,13 +6,11 @@ import ru.practicum.shareit.booking.dto.BookingDto;
 import java.util.List;
 
 @Data
-public class ItemDto {
+public class ItemOwnerDto {
     private Long id;
     private String name;
     private String description;
-    private Boolean available;
-    private Long ownerId;
-    private Long requestId;
+    private boolean available;
     private BookingDto lastBooking;
     private BookingDto nextBooking;
     private List<CommentDto> comments;
