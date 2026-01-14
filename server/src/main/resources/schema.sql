@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS items
 
     CONSTRAINT pk_item PRIMARY KEY (id),
     CONSTRAINT fk_item_owner FOREIGN KEY (owner_id) REFERENCES users (id),
-    CONSTRAINT fk_item_request FOREIGN KEY (request_id) REFERENCES users (id)
+    CONSTRAINT fk_item_request FOREIGN KEY (request_id) REFERENCES requests (id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_items_owner_id ON items (owner_id);
