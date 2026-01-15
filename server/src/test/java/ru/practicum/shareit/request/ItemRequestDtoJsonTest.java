@@ -1,17 +1,16 @@
 package ru.practicum.shareit.request;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
 import org.springframework.boot.test.json.JacksonTester;
 import org.springframework.boot.test.json.JsonContent;
+import ru.practicum.shareit.request.dto.ItemAnswerDto;
+import ru.practicum.shareit.request.dto.ItemRequestDto;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import ru.practicum.shareit.request.dto.ItemAnswerDto;
-import ru.practicum.shareit.request.dto.ItemRequestDto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,16 +40,14 @@ class ItemRequestDtoJsonTest {
 
     @Test
     void deserialize_itemRequestDto_readsCreatedFromIsoString_andItemsList() throws Exception {
-        String content = """
-                {
-                  "id": 100,
-                  "description": "Need a drill",
-                  "created": "2026-01-14T08:42:11",
-                  "items": [
-                    { "itemId": 1, "name": "Drill", "ownerId": 2 }
-                  ]
-                }
-                """;
+        String content = "{"
+                + "\"id\":100,"
+                + "\"description\":\"Need a drill\","
+                + "\"created\":\"2026-01-14T08:42:11\","
+                + "\"items\":["
+                + "  {\"itemId\":1,\"name\":\"Drill\",\"ownerId\":2}"
+                + "]"
+                + "}";
 
         ItemRequestDto dto = json.parseObject(content);
 

@@ -1,17 +1,16 @@
 package ru.practicum.shareit.booking;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
 import org.springframework.boot.test.json.JacksonTester;
 import org.springframework.boot.test.json.JsonContent;
-
-import java.time.LocalDateTime;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import ru.practicum.shareit.booking.dto.BookingDto;
 import ru.practicum.shareit.booking.dto.BookingItemDto;
 import ru.practicum.shareit.booking.dto.BookingUserDto;
 import ru.practicum.shareit.booking.model.BookingStatus;
+
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,16 +49,14 @@ class BookingDtoJsonTest {
 
     @Test
     void deserialize_bookingDto_readsIsoDatesWithoutMillis() throws Exception {
-        String content = """
-                {
-                  "id": 10,
-                  "start": "2026-01-14T08:42:11",
-                  "end": "2026-01-15T08:42:11",
-                  "status": "APPROVED",
-                  "item": { "id": 1, "name": "Drill" },
-                  "booker": { "id": 2 }
-                }
-                """;
+        String content = "{"
+                + "\"id\":10,"
+                + "\"start\":\"2026-01-14T08:42:11\","
+                + "\"end\":\"2026-01-15T08:42:11\","
+                + "\"status\":\"APPROVED\","
+                + "\"item\":{\"id\":1,\"name\":\"Drill\"},"
+                + "\"booker\":{\"id\":2}"
+                + "}";
 
         BookingDto dto = json.parseObject(content);
 
