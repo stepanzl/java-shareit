@@ -612,5 +612,79 @@ class ItemServiceImplTest {
         verifyNoInteractions(userRepository, itemRepository, bookingRepository, commentRepository);
     }
 
+    @Test
+    void search_whenRepositoryReturnsItems_thenMapsSortedByIdAndAttachesComments() {
+        String text = "drill";
+
+        Item item2 = new Item();
+        item2.setId(2L);
+        Item item1 = new Item();
+        item1.setId(1L);
+
+        when(itemRepository.search(text)).thenReturn(List.of(item2, item1));
+
+        Comment c1 = new Comment();
+        Item i1ref = new Item();
+        i1ref.setId(1L);
+        c1.setItem(i1ref);
+
+        Comment c2 = new Comment();
+        Item i2ref = new Item();
+        i2ref.setId(2L);
+        c2.setItem(i2ref);
+
+        // важно: не фиксируем порядок id в стабе, чтобы не ловить strict-stubbing
+        when(commentRepository.findAllByItem_IdIn(anyList(), any(Sort.class)))
+                .thenReturn(List.of(c1, c2));
+
+        CommentDto cd1 = new CommentDto();
+        cd1.setId(11L);
+        cd1.setText("c1");
+        when(commentMapper.toDto(c1)).thenReturn(cd1);
+
+        CommentDto cd2 = new CommentDto();
+        cd2.setId(22L);
+        cd2.setText("c2");
+        when(commentMapper.toDto(c2)).thenReturn(cd2);
+
+        ItemDto dto1 = new ItemDto();
+        dto1.setId(1L);
+        when(itemMapper.toDto(item1)).thenReturn(dto1);
+
+        ItemDto dto2 = new ItemDto();
+        dto2.setId(2L);
+        when(itemMapper.toDto(item2)).thenReturn(dto2);
+
+        List<ItemDto> result = itemService.search(text);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+        assertThat(result.get(1).getId()).isEqualTo(2L);
+
+        assertThat(result.get(0).getComments()).containsExactly(cd1);
+        assertThat(result.get(1).getComments()).containsExactly(cd2);
+
+        // проверяем, что в репозиторий ушли именно отсортированные id [1,2]
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Long>> idsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(commentRepository).findAllByItem_IdIn(idsCaptor.capture(), any(Sort.class));
+        assertThat(idsCaptor.getValue()).containsExactly(1L, 2L);
+
+        verify(itemRepository).search(text);
+    }
+
+    @Test
+    void search_whenRepositoryReturnsEmpty_thenReturnsEmptyAndNoCommentLoad() {
+        when(itemRepository.search("x")).thenReturn(List.of());
+
+        List<ItemDto> result = itemService.search("x");
+
+        assertThat(result).isEmpty();
+        verify(itemRepository).search("x");
+        verifyNoInteractions(commentRepository, itemMapper, commentMapper);
+    }
+
+
+
 
 }
