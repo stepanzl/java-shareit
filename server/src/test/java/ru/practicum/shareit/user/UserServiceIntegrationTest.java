@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
-class UserServiceIT {
+class UserServiceIntegrationTest {
 
     @Autowired
     private UserService userService;

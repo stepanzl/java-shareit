@@ -279,4 +279,338 @@ class ItemServiceImplTest {
         assertThat(captor.getValue().getItem()).isSameAs(item);
         assertThat(captor.getValue().getText()).isEqualTo("Nice");
     }
+
+    @Test
+    void create_whenNameBlank_thenBadRequest() {
+        long ownerId = 1L;
+
+        ItemCreateDto in = new ItemCreateDto();
+        in.setName("  ");
+        in.setDescription("d");
+        in.setAvailable(true);
+
+        assertThatThrownBy(() -> itemService.create(ownerId, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Item name");
+    }
+
+    @Test
+    void create_whenDescriptionBlank_thenBadRequest() {
+        long ownerId = 1L;
+
+        ItemCreateDto in = new ItemCreateDto();
+        in.setName("n");
+        in.setDescription("");
+        in.setAvailable(true);
+
+        assertThatThrownBy(() -> itemService.create(ownerId, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Item description");
+    }
+
+    @Test
+    void create_whenAvailableNull_thenBadRequest() {
+        long ownerId = 1L;
+
+        ItemCreateDto in = new ItemCreateDto();
+        in.setName("n");
+        in.setDescription("d");
+        in.setAvailable(null);
+
+        assertThatThrownBy(() -> itemService.create(ownerId, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("availability");
+    }
+
+    @Test
+    void create_whenOwnerNotFound_thenNotFound() {
+        long ownerId = 1L;
+
+        ItemCreateDto in = new ItemCreateDto();
+        in.setName("n");
+        in.setDescription("d");
+        in.setAvailable(true);
+
+        when(userRepository.findById(ownerId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.create(ownerId, in))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("User not found");
+    }
+
+    @Test
+    void create_whenRequestIdProvidedAndFound_thenSavesWithRequest() {
+        long ownerId = 1L;
+
+        ItemCreateDto in = new ItemCreateDto();
+        in.setName("Drill");
+        in.setDescription("Good drill");
+        in.setAvailable(true);
+        in.setRequestId(99L);
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        ru.practicum.shareit.request.model.ItemRequest req = new ru.practicum.shareit.request.model.ItemRequest();
+        req.setId(99L);
+
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(itemRequestRepository.findById(99L)).thenReturn(Optional.of(req));
+
+        Item model = new Item();
+        model.setName("Drill");
+        model.setDescription("Good drill");
+        model.setAvailable(true);
+        when(itemMapper.toModel(in)).thenReturn(model);
+
+        Item saved = new Item();
+        saved.setId(10L);
+        saved.setOwner(owner);
+        saved.setRequest(req);
+        saved.setName("Drill");
+        saved.setDescription("Good drill");
+        saved.setAvailable(true);
+        when(itemRepository.save(any(Item.class))).thenReturn(saved);
+
+        ItemDto out = new ItemDto();
+        out.setId(10L);
+        out.setName("Drill");
+        out.setDescription("Good drill");
+        out.setAvailable(true);
+        out.setRequestId(99L);
+        when(itemMapper.toDto(saved)).thenReturn(out);
+
+        ItemDto result = itemService.create(ownerId, in);
+
+        assertThat(result.getId()).isEqualTo(10L);
+        assertThat(result.getComments()).isNotNull();
+        assertThat(result.getComments()).isEmpty();
+
+        ArgumentCaptor<Item> captor = ArgumentCaptor.forClass(Item.class);
+        verify(itemRepository).save(captor.capture());
+        assertThat(captor.getValue().getRequest()).isNotNull();
+        assertThat(captor.getValue().getRequest().getId()).isEqualTo(99L);
+    }
+
+    @Test
+    void update_whenItemNotFound_thenNotFound() {
+        when(itemRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.update(1L, 10L, new ItemUpdateDto()))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Item not found");
+    }
+
+    @Test
+    void update_whenNotOwner_thenNotFound() {
+        long ownerId = 1L;
+        long otherId = 2L;
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item = new Item();
+        item.setId(10L);
+        item.setOwner(owner);
+
+        when(itemRepository.findById(10L)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> itemService.update(otherId, 10L, new ItemUpdateDto()))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("for this owner");
+    }
+
+    @Test
+    void update_whenNameBlank_thenBadRequest() {
+        long ownerId = 1L;
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item = new Item();
+        item.setId(10L);
+        item.setOwner(owner);
+
+        when(itemRepository.findById(10L)).thenReturn(Optional.of(item));
+
+        ItemUpdateDto dto = new ItemUpdateDto();
+        dto.setName("   ");
+
+        assertThatThrownBy(() -> itemService.update(ownerId, 10L, dto))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Item name");
+    }
+
+    @Test
+    void update_whenDescriptionBlank_thenBadRequest() {
+        long ownerId = 1L;
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item = new Item();
+        item.setId(10L);
+        item.setOwner(owner);
+
+        when(itemRepository.findById(10L)).thenReturn(Optional.of(item));
+
+        ItemUpdateDto dto = new ItemUpdateDto();
+        dto.setDescription("");
+
+        assertThatThrownBy(() -> itemService.update(ownerId, 10L, dto))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Item description");
+    }
+
+    @Test
+    void addComment_whenTextBlank_thenBadRequest() {
+        CommentCreateDto in = new CommentCreateDto();
+        in.setText("   ");
+
+        assertThatThrownBy(() -> itemService.addComment(1L, 10L, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("must not be blank");
+    }
+
+    @Test
+    void getByOwner_whenNoItems_thenReturnsEmptyAndDoesNotQueryBookingsComments() {
+        long ownerId = 1L;
+        User owner = new User();
+        owner.setId(ownerId);
+
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(itemRepository.findAllByOwner_Id(ownerId)).thenReturn(List.of());
+
+        List<ItemOwnerDto> result = itemService.getByOwner(ownerId);
+
+        assertThat(result).isEmpty();
+
+        verify(commentRepository, never()).findAllByItem_IdIn(anyList(), any());
+        verify(bookingRepository, never()).findByItem_IdInAndStatus(anyList(), any(), any());
+    }
+
+    @Test
+    void getByOwner_whenHasItems_thenAttachesCommentsAndBookings() {
+        long ownerId = 1L;
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item1 = new Item();
+        item1.setId(10L);
+        item1.setOwner(owner);
+        item1.setName("Drill");
+        item1.setDescription("Good");
+        item1.setAvailable(true);
+
+        Item item2 = new Item();
+        item2.setId(11L);
+        item2.setOwner(owner);
+        item2.setName("Saw");
+        item2.setDescription("Fine");
+        item2.setAvailable(true);
+
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(itemRepository.findAllByOwner_Id(ownerId)).thenReturn(List.of(item1, item2));
+
+        // comments for both items (через item внутри Comment, чтобы groupingBy c.getItem().getId() работал)
+        Comment c1 = new Comment();
+        c1.setId(1L);
+        c1.setItem(item1);
+        Comment c2 = new Comment();
+        c2.setId(2L);
+        c2.setItem(item2);
+
+        when(commentRepository.findAllByItem_IdIn(eq(List.of(10L, 11L)), any(Sort.class)))
+                .thenReturn(List.of(c1, c2));
+
+        CommentDto cd1 = new CommentDto();
+        cd1.setId(1L);
+        CommentDto cd2 = new CommentDto();
+        cd2.setId(2L);
+        when(commentMapper.toDto(c1)).thenReturn(cd1);
+        when(commentMapper.toDto(c2)).thenReturn(cd2);
+
+        // bookings approved for both items
+        Booking pastFor1 = new Booking();
+        pastFor1.setId(100L);
+        pastFor1.setItem(item1);
+        pastFor1.setStart(LocalDateTime.now().minusDays(3));
+        pastFor1.setEnd(LocalDateTime.now().minusDays(2));
+        pastFor1.setStatus(BookingStatus.APPROVED);
+
+        Booking futureFor2 = new Booking();
+        futureFor2.setId(200L);
+        futureFor2.setItem(item2);
+        futureFor2.setStart(LocalDateTime.now().plusDays(2));
+        futureFor2.setEnd(LocalDateTime.now().plusDays(3));
+        futureFor2.setStatus(BookingStatus.APPROVED);
+
+        when(bookingRepository.findByItem_IdInAndStatus(eq(List.of(10L, 11L)), eq(BookingStatus.APPROVED), any(Sort.class)))
+                .thenReturn(List.of(pastFor1, futureFor2));
+
+        List<ItemOwnerDto> result = itemService.getByOwner(ownerId);
+
+        assertThat(result).hasSize(2);
+
+        ItemOwnerDto r1 = result.stream().filter(x -> x.getId().equals(10L)).findFirst().orElseThrow();
+        assertThat(r1.getComments()).hasSize(1);
+        assertThat(r1.getLastBooking()).isNotNull(); // past -> lastBooking
+
+        ItemOwnerDto r2 = result.stream().filter(x -> x.getId().equals(11L)).findFirst().orElseThrow();
+        assertThat(r2.getComments()).hasSize(1);
+        assertThat(r2.getNextBooking()).isNotNull(); // future -> nextBooking
+    }
+
+    @Test
+    void update_whenNameBlank_thenThrowsBadRequest() {
+        long ownerId = 1L;
+        long itemId = 10L;
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item = new Item();
+        item.setId(itemId);
+        item.setOwner(owner);
+
+        ItemUpdateDto in = new ItemUpdateDto();
+        in.setName("   "); // ветка validateNameUpdate
+
+        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> itemService.update(ownerId, itemId, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Item name must not be blank");
+
+        verify(itemRepository, never()).save(any());
+    }
+
+    @Test
+    void create_whenMissingAvailable_thenThrowsBadRequest() {
+        long ownerId = 1L;
+        ItemCreateDto in = new ItemCreateDto();
+        in.setName("Drill");
+        in.setDescription("Good");
+        in.setAvailable(null); // ветка validateCreate
+
+        assertThatThrownBy(() -> itemService.create(ownerId, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("availability");
+
+        verifyNoInteractions(userRepository, itemRepository, itemMapper);
+    }
+
+    @Test
+    void addComment_whenBlankText_thenThrowsBadRequest() {
+        CommentCreateDto in = new CommentCreateDto();
+        in.setText("   "); // ветка в addComment до БД
+
+        assertThatThrownBy(() -> itemService.addComment(1L, 2L, in))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("must not be blank");
+
+        verifyNoInteractions(userRepository, itemRepository, bookingRepository, commentRepository);
+    }
+
+
 }

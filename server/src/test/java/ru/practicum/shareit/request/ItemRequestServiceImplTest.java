@@ -7,6 +7,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.repository.ItemRepository;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -239,4 +241,120 @@ class ItemRequestServiceImplTest {
 
         verify(itemRepository, never()).findAllByRequest_IdIn(anyList());
     }
+
+    @Test
+    void create_whenUserNotFound_thenThrowsNotFound() {
+        long userId = 999L;
+
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        ItemRequestCreateDto in = new ItemRequestCreateDto();
+        in.setDescription("Need");
+
+        assertThatThrownBy(() -> requestService.create(userId, in))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("User not found");
+
+        verify(userRepository).findById(userId);
+        verify(requestRepository, never()).save(any());
+        verifyNoInteractions(requestMapper, itemRepository);
+    }
+
+    @Test
+    void getOwn_whenNoRequests_thenReturnsEmptyAndDoesNotQueryItems() {
+        long userId = 1L;
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+        when(requestRepository.findAllByRequestor_IdOrderByCreatedDesc(userId)).thenReturn(List.of());
+
+        List<ItemRequestDto> out = requestService.getOwn(userId);
+
+        assertThat(out).isEmpty();
+
+        verify(itemRepository, never()).findAllByRequest_IdIn(anyList());
+    }
+
+    @Test
+    void getAll_whenSizeZero_thenThrowsBadRequest() {
+        long userId = 1L;
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+
+        assertThatThrownBy(() -> requestService.getAll(userId, 0, 0))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Size must be positive");
+
+        verify(userRepository).findById(userId);
+        verifyNoInteractions(requestRepository, requestMapper, itemRepository);
+    }
+
+    @Test
+    void getAll_whenDtosHaveNullIds_thenItemsEmptyAndNoItemQuery() {
+        long userId = 1L;
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+
+        ItemRequest r = new ItemRequest();
+        r.setId(123L);
+
+        // Маппер отдаёт DTO без id -> requestIds будет пустой
+        ItemRequestDto dto = new ItemRequestDto();
+        dto.setId(null);
+        dto.setDescription("desc");
+        dto.setCreated(LocalDateTime.now());
+        dto.setItems(null);
+
+        when(requestRepository.findAllByRequestor_IdNotOrderByCreatedDesc(eq(userId), any(Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(r)));
+        when(requestMapper.toDto(r)).thenReturn(dto);
+
+        List<ItemRequestDto> out = requestService.getAll(userId, 0, 10);
+
+        assertThat(out).hasSize(1);
+        assertThat(out.get(0).getItems()).isNotNull();
+        assertThat(out.get(0).getItems()).isEmpty();
+
+        verify(itemRepository, never()).findAllByRequest_IdIn(anyList());
+    }
+
+    @Test
+    void getById_whenExists_thenReturnsDtoWithAttachedItems() {
+        long userId = 1L;
+        long requestId = 77L;
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+
+        ItemRequest r = new ItemRequest();
+        r.setId(requestId);
+        r.setDescription("need");
+        r.setCreated(LocalDateTime.now());
+
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(r));
+
+        ItemRequestDto dto = new ItemRequestDto();
+        dto.setId(requestId);
+        dto.setDescription("need");
+        dto.setCreated(r.getCreated());
+        dto.setItems(null);
+
+        when(requestMapper.toDto(r)).thenReturn(dto);
+
+        Item item = new Item();
+        item.setId(10L);
+        item.setName("drill");
+        User owner = new User();
+        owner.setId(5L);
+        item.setOwner(owner);
+        item.setRequest(r);
+
+        when(itemRepository.findAllByRequest_IdIn(eq(List.of(requestId)))).thenReturn(List.of(item));
+
+        ItemRequestDto out = requestService.getById(userId, requestId);
+
+        assertThat(out.getId()).isEqualTo(requestId);
+        assertThat(out.getItems())
+                .usingRecursiveFieldByFieldElementComparator()
+                .containsExactly(new ItemAnswerDto(10L, "drill", 5L));
+    }
+
 }

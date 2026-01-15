@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
 @Transactional
-class BookingServiceIT {
+class BookingServiceIntegrationTest {
 
     @Autowired
     private BookingService bookingService;

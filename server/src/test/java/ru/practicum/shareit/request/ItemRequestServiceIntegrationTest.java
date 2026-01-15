@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Transactional
-class ItemRequestServiceIT {
+class ItemRequestServiceIntegrationTest {
 
     @Autowired
     private ItemRequestService itemRequestService;

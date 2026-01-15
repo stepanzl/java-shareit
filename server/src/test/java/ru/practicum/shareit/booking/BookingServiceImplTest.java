@@ -352,4 +352,188 @@ class BookingServiceImplTest {
 
         verify(bookingRepository).save(any(Booking.class));
     }
+
+    @Test
+    void create_whenBookerNotFound_thenThrowsNotFound() {
+        long bookerId = 1L;
+
+        BookingCreateDto dto = new BookingCreateDto();
+        dto.setItemId(10L);
+        dto.setStart(LocalDateTime.now().plusHours(1));
+        dto.setEnd(LocalDateTime.now().plusHours(2));
+
+        when(userRepository.findById(bookerId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> bookingService.create(bookerId, dto))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("User not found");
+
+        verify(userRepository).findById(bookerId);
+        verifyNoMoreInteractions(userRepository);
+        verifyNoInteractions(itemRepository, bookingRepository);
+    }
+
+    @Test
+    void create_whenItemNotFound_thenThrowsNotFound() {
+        long bookerId = 1L;
+
+        BookingCreateDto dto = new BookingCreateDto();
+        dto.setItemId(10L);
+        dto.setStart(LocalDateTime.now().plusHours(1));
+        dto.setEnd(LocalDateTime.now().plusHours(2));
+
+        when(userRepository.findById(bookerId)).thenReturn(Optional.of(new User()));
+        when(itemRepository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> bookingService.create(bookerId, dto))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Item not found");
+
+        verify(userRepository).findById(bookerId);
+        verify(itemRepository).findById(10L);
+        verifyNoInteractions(bookingRepository);
+    }
+
+    @Test
+    void approve_whenBookingNotFound_thenThrowsNotFound() {
+        when(bookingRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> bookingService.approve(1L, 999L, true))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Booking not found");
+
+        verify(bookingRepository).findById(999L);
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void approve_whenRejected_thenSetsRejected() {
+        long ownerId = 1L;
+        long bookingId = 100L;
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item = new Item();
+        item.setOwner(owner);
+
+        Booking booking = new Booking();
+        booking.setId(bookingId);
+        booking.setItem(item);
+        booking.setStatus(BookingStatus.WAITING);
+
+        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BookingDto result = bookingService.approve(ownerId, bookingId, false);
+
+        assertThat(result.getStatus()).isEqualTo(BookingStatus.REJECTED);
+
+        ArgumentCaptor<Booking> captor = ArgumentCaptor.forClass(Booking.class);
+        verify(bookingRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(BookingStatus.REJECTED);
+    }
+
+    @Test
+    void getById_whenRequesterIsBooker_thenReturnsDto() {
+        long bookerId = 2L;
+        long bookingId = 100L;
+
+        User booker = new User();
+        booker.setId(bookerId);
+
+        User owner = new User();
+        owner.setId(3L);
+
+        Item item = new Item();
+        item.setOwner(owner);
+
+        Booking booking = new Booking();
+        booking.setId(bookingId);
+        booking.setBooker(booker);
+        booking.setItem(item);
+        booking.setStatus(BookingStatus.WAITING);
+
+        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
+
+        BookingDto result = bookingService.getById(bookerId, bookingId);
+
+        assertThat(result.getId()).isEqualTo(bookingId);
+        assertThat(result.getBooker().getId()).isEqualTo(bookerId);
+        assertThat(result.getItem().getId()).isEqualTo(item.getId()); // может быть null если item.id не задан
+        assertThat(result.getStatus()).isEqualTo(BookingStatus.WAITING);
+
+        verify(bookingRepository).findById(bookingId);
+    }
+
+    @Test
+    void getById_whenRequesterIsOwner_thenReturnsDto() {
+        long ownerId = 3L;
+        long bookingId = 100L;
+
+        User booker = new User();
+        booker.setId(2L);
+
+        User owner = new User();
+        owner.setId(ownerId);
+
+        Item item = new Item();
+        item.setOwner(owner);
+
+        Booking booking = new Booking();
+        booking.setId(bookingId);
+        booking.setBooker(booker);
+        booking.setItem(item);
+        booking.setStatus(BookingStatus.WAITING);
+
+        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
+
+        BookingDto result = bookingService.getById(ownerId, bookingId);
+
+        assertThat(result.getId()).isEqualTo(bookingId);
+        assertThat(result.getStatus()).isEqualTo(BookingStatus.WAITING);
+
+        verify(bookingRepository).findById(bookingId);
+    }
+
+    @Test
+    void getByBooker_whenStateCurrent_thenCallsCurrentRepoMethod() {
+        long bookerId = 1L;
+        when(userRepository.findById(bookerId)).thenReturn(Optional.of(new User()));
+
+        Booking b = new Booking();
+        b.setId(1L);
+
+        when(bookingRepository.findCurrentByBooker(eq(bookerId), any(LocalDateTime.class), any(Sort.class)))
+                .thenReturn(List.of(b));
+
+        List<BookingDto> result = bookingService.getByBooker(bookerId, BookingState.CURRENT);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+
+        verify(bookingRepository).findCurrentByBooker(eq(bookerId), any(LocalDateTime.class), any(Sort.class));
+        verify(bookingRepository, never()).findByBooker_Id(anyLong(), any());
+    }
+
+    @Test
+    void getByOwner_whenStateRejected_thenCallsRejectedRepoMethod() {
+        long ownerId = 1L;
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(new User()));
+
+        Booking b = new Booking();
+        b.setId(1L);
+
+        when(bookingRepository.findByItem_Owner_IdAndStatus(eq(ownerId), eq(BookingStatus.REJECTED), any(Sort.class)))
+                .thenReturn(List.of(b));
+
+        List<BookingDto> result = bookingService.getByOwner(ownerId, BookingState.REJECTED);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(1L);
+
+        verify(bookingRepository).findByItem_Owner_IdAndStatus(eq(ownerId), eq(BookingStatus.REJECTED), any(Sort.class));
+        verify(bookingRepository, never()).findByOwner(anyLong(), any());
+    }
+
 }

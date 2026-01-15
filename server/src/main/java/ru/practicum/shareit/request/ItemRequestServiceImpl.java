@@ -5,6 +5,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.repository.ItemRepository;
@@ -62,7 +63,11 @@ public class ItemRequestServiceImpl implements ItemRequestService {
     public List<ItemRequestDto> getAll(long userId, int from, int size) {
         getUserOrThrow(userId);
 
-        int page = (size == 0) ? 0 : from / size;
+        if (size < 1) {
+            throw new BadRequestException("Size must be positive");
+        }
+
+        int page = from / size;
         Pageable pageable = PageRequest.of(page, size, Sort.by("created").descending());
 
         List<ItemRequestDto> dtos = requestRepository.findAllByRequestor_IdNotOrderByCreatedDesc(userId, pageable)
