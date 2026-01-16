@@ -1,8 +1,11 @@
 package ru.practicum.shareit.booking;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 import ru.practicum.shareit.booking.dto.BookingCreateDto;
@@ -23,9 +26,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class BookingServiceImplTest {
@@ -39,6 +49,11 @@ class BookingServiceImplTest {
 
     @InjectMocks
     private BookingServiceImpl bookingService;
+
+    @BeforeEach
+    void setup() {
+        lenient().when(userRepository.existsById(anyLong())).thenReturn(true);
+    }
 
     @Test
     void create_whenItemNotAvailable_thenThrowsBadRequest() {
@@ -104,7 +119,7 @@ class BookingServiceImplTest {
         dto.setItemId(10L);
         LocalDateTime start = LocalDateTime.now().plusHours(2);
         dto.setStart(start);
-        dto.setEnd(start); // not after
+        dto.setEnd(start);
 
         User booker = new User();
         booker.setId(bookerId);
@@ -271,7 +286,6 @@ class BookingServiceImplTest {
     @Test
     void getByBooker_whenOk_thenUsesRepositoryByStateAll() {
         long bookerId = 1L;
-        when(userRepository.findById(bookerId)).thenReturn(Optional.of(new User()));
 
         Booking b = new Booking();
         b.setId(1L);
@@ -289,7 +303,6 @@ class BookingServiceImplTest {
     @Test
     void getByOwner_whenOk_thenUsesRepositoryByStateWaiting() {
         long ownerId = 1L;
-        when(userRepository.findById(ownerId)).thenReturn(Optional.of(new User()));
 
         Booking b = new Booking();
         b.setId(1L);
@@ -369,7 +382,6 @@ class BookingServiceImplTest {
                 .hasMessageContaining("User not found");
 
         verify(userRepository).findById(bookerId);
-        verifyNoMoreInteractions(userRepository);
         verifyNoInteractions(itemRepository, bookingRepository);
     }
 
@@ -446,6 +458,7 @@ class BookingServiceImplTest {
         owner.setId(3L);
 
         Item item = new Item();
+        item.setId(10L);
         item.setOwner(owner);
 
         Booking booking = new Booking();
@@ -460,7 +473,7 @@ class BookingServiceImplTest {
 
         assertThat(result.getId()).isEqualTo(bookingId);
         assertThat(result.getBooker().getId()).isEqualTo(bookerId);
-        assertThat(result.getItem().getId()).isEqualTo(item.getId()); // может быть null если item.id не задан
+        assertThat(result.getItem().getId()).isEqualTo(10L);
         assertThat(result.getStatus()).isEqualTo(BookingStatus.WAITING);
 
         verify(bookingRepository).findById(bookingId);
@@ -478,6 +491,7 @@ class BookingServiceImplTest {
         owner.setId(ownerId);
 
         Item item = new Item();
+        item.setId(10L);
         item.setOwner(owner);
 
         Booking booking = new Booking();
@@ -499,7 +513,6 @@ class BookingServiceImplTest {
     @Test
     void getByBooker_whenStateCurrent_thenCallsCurrentRepoMethod() {
         long bookerId = 1L;
-        when(userRepository.findById(bookerId)).thenReturn(Optional.of(new User()));
 
         Booking b = new Booking();
         b.setId(1L);
@@ -519,7 +532,6 @@ class BookingServiceImplTest {
     @Test
     void getByOwner_whenStateRejected_thenCallsRejectedRepoMethod() {
         long ownerId = 1L;
-        when(userRepository.findById(ownerId)).thenReturn(Optional.of(new User()));
 
         Booking b = new Booking();
         b.setId(1L);
@@ -536,4 +548,29 @@ class BookingServiceImplTest {
         verify(bookingRepository, never()).findByOwner(anyLong(), any());
     }
 
+    @Test
+    void getByBooker_whenUserNotFound_thenThrowsNotFound() {
+        long bookerId = 1L;
+        when(userRepository.existsById(bookerId)).thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.getByBooker(bookerId, BookingState.ALL))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("User not found");
+
+        verify(userRepository).existsById(bookerId);
+        verifyNoInteractions(bookingRepository);
+    }
+
+    @Test
+    void getByOwner_whenUserNotFound_thenThrowsNotFound() {
+        long ownerId = 1L;
+        when(userRepository.existsById(ownerId)).thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.getByOwner(ownerId, BookingState.ALL))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("User not found");
+
+        verify(userRepository).existsById(ownerId);
+        verifyNoInteractions(bookingRepository);
+    }
 }

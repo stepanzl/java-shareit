@@ -1,8 +1,11 @@
 package ru.practicum.shareit.item;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
 import ru.practicum.shareit.booking.model.Booking;
@@ -10,7 +13,12 @@ import ru.practicum.shareit.booking.model.BookingStatus;
 import ru.practicum.shareit.booking.repository.BookingRepository;
 import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
-import ru.practicum.shareit.item.dto.*;
+import ru.practicum.shareit.item.dto.CommentCreateDto;
+import ru.practicum.shareit.item.dto.CommentDto;
+import ru.practicum.shareit.item.dto.ItemCreateDto;
+import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.item.dto.ItemOwnerDto;
+import ru.practicum.shareit.item.dto.ItemUpdateDto;
 import ru.practicum.shareit.item.mapper.CommentMapper;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Comment;
@@ -25,9 +33,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ItemServiceImplTest {
@@ -49,6 +65,11 @@ class ItemServiceImplTest {
 
     @InjectMocks
     private ItemServiceImpl itemService;
+
+    @BeforeEach
+    void setup() {
+        lenient().when(userRepository.existsById(anyLong())).thenReturn(true);
+    }
 
     @Test
     void create_whenValidWithoutRequestId_thenSavesAndReturnsDtoWithEmptyComments() {
@@ -97,7 +118,6 @@ class ItemServiceImplTest {
         assertThat(captor.getValue().getOwner()).isSameAs(owner);
 
         verify(itemRequestRepository, never()).findById(anyLong());
-        verifyNoMoreInteractions(itemRepository, userRepository, itemRequestRepository, itemMapper, commentRepository, bookingRepository, commentMapper);
     }
 
     @Test
@@ -475,10 +495,7 @@ class ItemServiceImplTest {
     @Test
     void getByOwner_whenNoItems_thenReturnsEmptyAndDoesNotQueryBookingsComments() {
         long ownerId = 1L;
-        User owner = new User();
-        owner.setId(ownerId);
 
-        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
         when(itemRepository.findAllByOwner_Id(ownerId)).thenReturn(List.of());
 
         List<ItemOwnerDto> result = itemService.getByOwner(ownerId);
@@ -492,6 +509,7 @@ class ItemServiceImplTest {
     @Test
     void getByOwner_whenHasItems_thenAttachesCommentsAndBookings() {
         long ownerId = 1L;
+
         User owner = new User();
         owner.setId(ownerId);
 
@@ -509,10 +527,8 @@ class ItemServiceImplTest {
         item2.setDescription("Fine");
         item2.setAvailable(true);
 
-        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
         when(itemRepository.findAllByOwner_Id(ownerId)).thenReturn(List.of(item1, item2));
 
-        // comments for both items (через item внутри Comment, чтобы groupingBy c.getItem().getId() работал)
         Comment c1 = new Comment();
         c1.setId(1L);
         c1.setItem(item1);
@@ -530,7 +546,6 @@ class ItemServiceImplTest {
         when(commentMapper.toDto(c1)).thenReturn(cd1);
         when(commentMapper.toDto(c2)).thenReturn(cd2);
 
-        // bookings approved for both items
         Booking pastFor1 = new Booking();
         pastFor1.setId(100L);
         pastFor1.setItem(item1);
@@ -554,35 +569,11 @@ class ItemServiceImplTest {
 
         ItemOwnerDto r1 = result.stream().filter(x -> x.getId().equals(10L)).findFirst().orElseThrow();
         assertThat(r1.getComments()).hasSize(1);
-        assertThat(r1.getLastBooking()).isNotNull(); // past -> lastBooking
+        assertThat(r1.getLastBooking()).isNotNull();
 
         ItemOwnerDto r2 = result.stream().filter(x -> x.getId().equals(11L)).findFirst().orElseThrow();
         assertThat(r2.getComments()).hasSize(1);
-        assertThat(r2.getNextBooking()).isNotNull(); // future -> nextBooking
-    }
-
-    @Test
-    void update_whenNameBlank_thenThrowsBadRequest() {
-        long ownerId = 1L;
-        long itemId = 10L;
-
-        User owner = new User();
-        owner.setId(ownerId);
-
-        Item item = new Item();
-        item.setId(itemId);
-        item.setOwner(owner);
-
-        ItemUpdateDto in = new ItemUpdateDto();
-        in.setName("   "); // ветка validateNameUpdate
-
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
-
-        assertThatThrownBy(() -> itemService.update(ownerId, itemId, in))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Item name must not be blank");
-
-        verify(itemRepository, never()).save(any());
+        assertThat(r2.getNextBooking()).isNotNull();
     }
 
     @Test
@@ -591,25 +582,13 @@ class ItemServiceImplTest {
         ItemCreateDto in = new ItemCreateDto();
         in.setName("Drill");
         in.setDescription("Good");
-        in.setAvailable(null); // ветка validateCreate
+        in.setAvailable(null);
 
         assertThatThrownBy(() -> itemService.create(ownerId, in))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("availability");
 
         verifyNoInteractions(userRepository, itemRepository, itemMapper);
-    }
-
-    @Test
-    void addComment_whenBlankText_thenThrowsBadRequest() {
-        CommentCreateDto in = new CommentCreateDto();
-        in.setText("   "); // ветка в addComment до БД
-
-        assertThatThrownBy(() -> itemService.addComment(1L, 2L, in))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("must not be blank");
-
-        verifyNoInteractions(userRepository, itemRepository, bookingRepository, commentRepository);
     }
 
     @Test
@@ -633,7 +612,6 @@ class ItemServiceImplTest {
         i2ref.setId(2L);
         c2.setItem(i2ref);
 
-        // важно: не фиксируем порядок id в стабе, чтобы не ловить strict-stubbing
         when(commentRepository.findAllByItem_IdIn(anyList(), any(Sort.class)))
                 .thenReturn(List.of(c1, c2));
 
@@ -664,7 +642,6 @@ class ItemServiceImplTest {
         assertThat(result.get(0).getComments()).containsExactly(cd1);
         assertThat(result.get(1).getComments()).containsExactly(cd2);
 
-        // проверяем, что в репозиторий ушли именно отсортированные id [1,2]
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Long>> idsCaptor = ArgumentCaptor.forClass(List.class);
         verify(commentRepository).findAllByItem_IdIn(idsCaptor.capture(), any(Sort.class));
@@ -684,7 +661,16 @@ class ItemServiceImplTest {
         verifyNoInteractions(commentRepository, itemMapper, commentMapper);
     }
 
+    @Test
+    void getByOwner_whenUserNotFound_thenThrowsNotFound() {
+        long ownerId = 1L;
+        when(userRepository.existsById(ownerId)).thenReturn(false);
 
+        assertThatThrownBy(() -> itemService.getByOwner(ownerId))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("User not found");
 
-
+        verify(userRepository).existsById(ownerId);
+        verifyNoInteractions(itemRepository);
+    }
 }

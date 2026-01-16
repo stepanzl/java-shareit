@@ -19,5 +19,6 @@ public interface UserMapper {
     User toModel(UserCreateDto dto);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
     void updateUserFromDto(UserUpdateDto dto, @MappingTarget User user);
 }

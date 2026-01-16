@@ -94,13 +94,13 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public List<BookingDto> getByBooker(Long bookerId, BookingState state) {
-        getUser(bookerId);
+        checkUserExists(bookerId);
         return map(selectByBooker(bookerId, state));
     }
 
     @Override
     public List<BookingDto> getByOwner(Long ownerId, BookingState state) {
-        getUser(ownerId);
+        checkUserExists(ownerId);
         return map(selectByOwner(ownerId, state));
     }
 
@@ -145,5 +145,11 @@ public class BookingServiceImpl implements BookingService {
     private User getUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    private void checkUserExists(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new NotFoundException("User not found");
+        }
     }
 }

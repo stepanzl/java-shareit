@@ -5,13 +5,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.repository.ItemRepository;
-import ru.practicum.shareit.request.dto.ItemAnswerDto;
 import ru.practicum.shareit.request.dto.ItemRequestCreateDto;
 import ru.practicum.shareit.request.dto.ItemRequestDto;
+import ru.practicum.shareit.request.dto.ItemResponseDto;
 import ru.practicum.shareit.request.mapper.ItemRequestMapper;
 import ru.practicum.shareit.request.model.ItemRequest;
 import ru.practicum.shareit.request.repository.ItemRequestRepository;
@@ -39,16 +38,16 @@ public class ItemRequestServiceImpl implements ItemRequestService {
         ItemRequest request = requestMapper.toEntity(dto);
         request.setRequestor(requestor);
 
-        ItemRequest saved = requestRepository.save(request);
+        ItemRequest savedRequest = requestRepository.save(request);
 
-        ItemRequestDto out = requestMapper.toDto(saved);
-        out.setItems(List.of());
-        return out;
+        ItemRequestDto requestDto = requestMapper.toDto(savedRequest);
+        requestDto.setItems(List.of());
+        return requestDto;
     }
 
     @Override
     public List<ItemRequestDto> getOwn(long userId) {
-        getUserOrThrow(userId);
+        checkUserExists(userId);
 
         List<ItemRequestDto> dtos = requestRepository.findAllByRequestor_IdOrderByCreatedDesc(userId)
                 .stream()
@@ -61,11 +60,7 @@ public class ItemRequestServiceImpl implements ItemRequestService {
 
     @Override
     public List<ItemRequestDto> getAll(long userId, int from, int size) {
-        getUserOrThrow(userId);
-
-        if (size < 1) {
-            throw new BadRequestException("Size must be positive");
-        }
+        checkUserExists(userId);
 
         int page = from / size;
         Pageable pageable = PageRequest.of(page, size, Sort.by("created").descending());
@@ -81,7 +76,7 @@ public class ItemRequestServiceImpl implements ItemRequestService {
 
     @Override
     public ItemRequestDto getById(long userId, long requestId) {
-        getUserOrThrow(userId);
+        checkUserExists(userId);
 
         ItemRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new NotFoundException("Request not found: " + requestId));
@@ -94,6 +89,12 @@ public class ItemRequestServiceImpl implements ItemRequestService {
     private User getUserOrThrow(long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found: " + userId));
+    }
+
+    private void checkUserExists(long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new NotFoundException("User not found: " + userId);
+        }
     }
 
     private ItemRequestDto toDtoWithoutItems(ItemRequest request) {
@@ -117,12 +118,12 @@ public class ItemRequestServiceImpl implements ItemRequestService {
 
         List<Item> items = itemRepository.findAllByRequest_IdIn(requestIds);
 
-        Map<Long, List<ItemAnswerDto>> itemsByRequestId = items.stream()
+        Map<Long, List<ItemResponseDto>> itemsByRequestId = items.stream()
                 .filter(i -> i.getRequest() != null && i.getRequest().getId() != null)
                 .collect(Collectors.groupingBy(
                         i -> i.getRequest().getId(),
                         Collectors.mapping(
-                                i -> new ItemAnswerDto(
+                                i -> new ItemResponseDto(
                                         i.getId(),
                                         i.getName(),
                                         i.getOwner() == null ? null : i.getOwner().getId()

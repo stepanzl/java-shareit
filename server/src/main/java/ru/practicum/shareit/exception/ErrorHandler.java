@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Map;
+
 @Slf4j
 @RestControllerAdvice
 public class ErrorHandler {
@@ -51,10 +53,21 @@ public class ErrorHandler {
         return new ErrorResponse(message);
     }
 
-    @ExceptionHandler(Throwable.class)
+    @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleUnexpected(Throwable e) {
         log.error("Unexpected error", e);
         return new ErrorResponse("Internal server error");
     }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> handleConstraintViolation(jakarta.validation.ConstraintViolationException e) {
+        String message = (e.getMessage() == null || e.getMessage().isBlank())
+                ? "Validation error"
+                : e.getMessage();
+        log.warn("Validation error: {}", message);
+        return Map.of("error", message);
+    }
+
 }

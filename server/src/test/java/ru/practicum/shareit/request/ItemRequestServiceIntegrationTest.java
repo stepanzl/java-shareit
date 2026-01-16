@@ -76,7 +76,7 @@ class ItemRequestServiceIntegrationTest {
         assertThat(dto.getItems()).hasSize(1);
 
         var answer = dto.getItems().get(0);
-        assertThat(answer.getItemId()).isEqualTo(item.getId());
+        assertThat(answer.getId()).isEqualTo(item.getId());
         assertThat(answer.getName()).isEqualTo(item.getName());
         assertThat(answer.getOwnerId()).isEqualTo(owner.getId());
     }

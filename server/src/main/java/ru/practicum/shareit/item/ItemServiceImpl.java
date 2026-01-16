@@ -123,7 +123,7 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemOwnerDto> getByOwner(Long ownerId) {
         log.info("Get items with bookings by ownerId={}", ownerId);
-        getUserOrThrow(ownerId);
+        checkUserExists(ownerId);
 
         LocalDateTime now = LocalDateTime.now();
         List<Item> items = itemRepository.findAllByOwner_Id(ownerId);
@@ -212,6 +212,12 @@ public class ItemServiceImpl implements ItemService {
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    private void checkUserExists(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new NotFoundException("User not found");
+        }
     }
 
     private Item getItemOrThrow(Long itemId) {

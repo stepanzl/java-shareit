@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
 import org.springframework.boot.test.json.JacksonTester;
 import org.springframework.boot.test.json.JsonContent;
-import ru.practicum.shareit.request.dto.ItemAnswerDto;
+import ru.practicum.shareit.request.dto.ItemResponseDto;
 import ru.practicum.shareit.request.dto.ItemRequestDto;
 
 import java.time.LocalDateTime;
@@ -45,7 +45,7 @@ class ItemRequestDtoJsonTest {
                 + "\"description\":\"Need a drill\","
                 + "\"created\":\"2026-01-14T08:42:11\","
                 + "\"items\":["
-                + "  {\"itemId\":1,\"name\":\"Drill\",\"ownerId\":2}"
+                + "  {\"id\":1,\"name\":\"Drill\",\"ownerId\":2}"
                 + "]"
                 + "}";
 
@@ -55,9 +55,9 @@ class ItemRequestDtoJsonTest {
         assertThat(dto.getDescription()).isEqualTo("Need a drill");
         assertThat(dto.getCreated()).isEqualTo(LocalDateTime.of(2026, 1, 14, 8, 42, 11));
 
-        List<ItemAnswerDto> items = dto.getItems();
+        List<ItemResponseDto> items = dto.getItems();
         assertThat(items).hasSize(1);
-        assertThat(items.get(0).getItemId()).isEqualTo(1L);
+        assertThat(items.get(0).getId()).isEqualTo(1L);
         assertThat(items.get(0).getName()).isEqualTo("Drill");
         assertThat(items.get(0).getOwnerId()).isEqualTo(2L);
     }

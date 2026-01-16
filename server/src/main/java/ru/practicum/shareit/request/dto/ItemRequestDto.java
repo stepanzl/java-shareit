@@ -11,5 +11,5 @@ public class ItemRequestDto {
     private Long id;
     private String description;
     private LocalDateTime created;
-    private List<ItemAnswerDto> items = new ArrayList<>();
+    private List<ItemResponseDto> items = new ArrayList<>();
 }

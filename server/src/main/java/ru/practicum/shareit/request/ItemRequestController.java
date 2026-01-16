@@ -1,7 +1,9 @@
 package ru.practicum.shareit.request;
 
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +21,7 @@ import java.util.List;
 @RequestMapping("/requests")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 public class ItemRequestController {
 
     private final ItemRequestService requestService;
@@ -39,7 +42,7 @@ public class ItemRequestController {
     @GetMapping("/all")
     public List<ItemRequestDto> getAll(@RequestHeader("X-Sharer-User-Id") long userId,
                                        @RequestParam(name = "from", defaultValue = "0") int from,
-                                       @RequestParam(name = "size", defaultValue = "10") int size) {
+                                       @Positive @RequestParam(name = "size", defaultValue = "10") int size) {
         log.info("Get all item requests, userId={}, from={}, size={}", userId, from, size);
         return requestService.getAll(userId, from, size);
     }
